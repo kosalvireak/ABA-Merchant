@@ -16,6 +16,7 @@ const {
   secondsLeft,
   select,
   regenerate,
+  simulate,
   clear,
 } = useKhqr();
 
@@ -72,6 +73,7 @@ function closePanel() {
           :seconds-left="secondsLeft"
           @retry="retry"
           @regenerate="regenerate"
+          @simulate="simulate"
           @close="closePanel"
         />
       </div>

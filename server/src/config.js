@@ -55,6 +55,9 @@ export const config = {
   get paywayApiKey() {
     return process.env.PAYWAY_API_KEY || "";
   },
+  get paywayPublicKey(){
+    return process.env.PAYWAY_PUBLIC_KEY || "";
+  },
   /**
    * Public HTTPS URL PayWay can POST payment notifications to.
    * Optional: without it, payment status relies on polling only.

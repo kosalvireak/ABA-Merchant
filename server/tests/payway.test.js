@@ -207,6 +207,39 @@ describe("USD mode", () => {
   });
 });
 
+describe("POST /api/payments/:tranId/simulate-payment", () => {
+  it("marks a pending transaction PAID, visible via the status endpoint", async () => {
+    stubFetch(qrResponse);
+    const res = await request.post("/api/payments/khqr").send({ productId: "p03" });
+    const tranId = res.body.tranId;
+
+    const sim = await request.post(`/api/payments/${tranId}/simulate-payment`).expect(200);
+    expect(sim.body.status).toBe("PAID");
+
+    // The store answers without calling PayWay again.
+    const fetchMock = stubFetch({
+      status: { code: "00", message: "Success!" },
+      data: { payment_status_code: 2 },
+    });
+    const statusRes = await request.get(`/api/payments/${tranId}/status`).expect(200);
+    expect(statusRes.body.status).toBe("PAID");
+    expect(fetchMock).not.toHaveBeenCalled(); // served from the in-memory store
+  });
+
+  it("returns 404 for an unknown transaction", async () => {
+    await request.post("/api/payments/Tunknown/simulate-payment").expect(404);
+  });
+
+  it("refuses to simulate on the production gateway", async () => {
+    process.env.PAYWAY_BASE_URL = "https://checkout.payway.com.kh";
+    try {
+      await request.post("/api/payments/Tany/simulate-payment").expect(403);
+    } finally {
+      process.env.PAYWAY_BASE_URL = "https://checkout-sandbox.payway.com.kh";
+    }
+  });
+});
+
 describe("PaywayError", () => {
   it("carries a code and default 500 status", () => {
     const err = new PaywayError("boom");

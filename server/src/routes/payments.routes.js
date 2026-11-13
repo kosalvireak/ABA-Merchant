@@ -57,6 +57,7 @@ router.post("/khqr", async (req, res, next) => {
     // Remember the transaction so the callback webhook and status endpoint
     // can find it later.
     setTransaction(tranId, { status: "PENDING", raw: null });
+    console.log("QR:", qr);
 
     res.json({
       productId: product.id,
@@ -107,6 +108,33 @@ router.get("/:tranId/status", async (req, res) => {
     }
     throw err;
   }
+});
+
+// POST /api/payments/:tranId/simulate-payment
+//
+// DEMO-ONLY helper. Sandbox QRs cannot be paid by a real bank app (the app
+// talks to the production gateway, which does not know this sandbox
+// merchant), so this endpoint marks a transaction PAID locally to let the
+// UI demonstrate the complete flow. Refuses to run against production.
+router.post("/:tranId/simulate-payment", (req, res) => {
+  if (config.isProduction) {
+    return res.status(403).json({
+      error: {
+        code: "FORBIDDEN",
+        message: "Payment simulation is disabled on the production gateway.",
+      },
+    });
+  }
+
+  const { tranId } = req.params;
+  if (!getTransaction(tranId)) {
+    return res.status(404).json({
+      error: { code: "TRANSACTION_NOT_FOUND", message: `Unknown transaction: ${tranId}` },
+    });
+  }
+
+  setTransaction(tranId, { status: "PAID", raw: { simulated: true } });
+  res.json({ status: "PAID", simulated: true });
 });
 
 // POST /api/payments/callback

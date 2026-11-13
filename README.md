@@ -122,6 +122,14 @@ Errors use one consistent shape: `{ "error": { "code": "...", "message": "..." }
    seconds after payment; otherwise it flips once the next poll (≤3 s) sees
    the approved transaction.
 
+> **"Transaction not found" when scanning with a real bank app:** expected.
+> Sandbox QRs belong to a sandbox-only merchant (`ec480484`) that the
+> production gateway — which real bank apps talk to — has never seen. To see
+> the complete **Paid ✓** flow in sandbox, click **"Simulate payment (sandbox
+> demo)"** under the QR (it POSTs to
+> `/api/payments/:tranId/simulate-payment`, which refuses to run on
+> production). Real end-to-end scan-to-pay requires production credentials.
+>
 > **Sandbox caveat:** sandbox transactions are simulated — scanning a sandbox
 > QR with the real ABA Mobile app will not complete a payment. In sandbox you
 > can exercise the "Paid" path by POSTing a fake webhook and watching it get

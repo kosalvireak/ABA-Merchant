@@ -9,7 +9,7 @@ const props = defineProps({
   secondsLeft: { type: Number, default: 0 },
 });
 
-const emit = defineEmits(["retry", "regenerate", "close"]);
+const emit = defineEmits(["retry", "regenerate", "simulate", "close"]);
 
 const showDebug = ref(false);
 
@@ -105,6 +105,16 @@ function openDeeplink() {
           @click="openDeeplink"
         >
           Pay with ABA Mobile
+        </button>
+
+        <button
+          v-if="status === 'success'"
+          class="link-btn small"
+          type="button"
+          title="Sandbox QRs can't be paid by a real bank app - this fakes the webhook locally"
+          @click="emit('simulate')"
+        >
+          Simulate payment (sandbox demo)
         </button>
 
         <button class="link-btn small" type="button" @click="emit('regenerate')">

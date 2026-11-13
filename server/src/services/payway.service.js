@@ -13,6 +13,10 @@ import { config } from "../config.js";
 const QR_PATH = "/api/payment-gateway/v1/payments/generate-qr";
 const CHECK_PATH = "/api/payment-gateway/v1/payments/check-transaction-2";
 
+function utcTimestamp() {
+  return new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+}
+
 /** Typed error so the route can map it to a 500 with a readable message. */
 export class PaywayError extends Error {
   constructor(message, { httpStatus = 500, code = "PAYWAY_ERROR", raw = null } = {}) {

@@ -1,5 +1,5 @@
 import { ref, computed, onUnmounted } from "vue";
-import { createKhqr, getPaymentStatus } from "../api/client.js";
+import { createKhqr, getPaymentStatus, simulatePayment } from "../api/client.js";
 
 /**
  * State + request logic for the QR panel.
@@ -114,6 +114,24 @@ export function useKhqr() {
     if (selectedProduct.value) return requestKhqr(selectedProduct.value);
   }
 
+  /**
+   * Demo-only: mark the current sandbox transaction as PAID on the server
+   * so the UI can show the complete flow. No-op if there is no active QR.
+   */
+  async function simulate() {
+    const tranId = payment.value?.tranId;
+    if (!tranId || status.value !== "success") return;
+    try {
+      const result = await simulatePayment(tranId);
+      if (result.status === "PAID" && payment.value?.tranId === tranId) {
+        status.value = "paid";
+        stopTimers();
+      }
+    } catch {
+      // best-effort demo helper; polling/expiry continues as normal
+    }
+  }
+
   /** Reset to the initial hint state. */
   function clear() {
     requestToken++;
@@ -141,6 +159,7 @@ export function useKhqr() {
     isQrActive,
     select,
     regenerate,
+    simulate,
     clear,
   };
 }

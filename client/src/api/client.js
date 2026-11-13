@@ -41,3 +41,9 @@ export function createKhqr(productId, { signal } = {}) {
 export function getPaymentStatus(tranId, { signal } = {}) {
   return request(`/api/payments/${tranId}/status`, { signal });
 }
+
+// Demo-only: marks the sandbox transaction as PAID on the server so the
+// full flow can be demonstrated without real money.
+export function simulatePayment(tranId, { signal } = {}) {
+  return request(`/api/payments/${tranId}/simulate-payment`, { method: "POST", signal });
+}
