@@ -1,0 +1,19 @@
+{
+  "name": "khqr-mart-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KHQR Mart demo - Vue 3 client + Express server for ABA/Bakong KHQR payments",
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev:server\" \"npm run dev:client\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "test": "npm --prefix server run test"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

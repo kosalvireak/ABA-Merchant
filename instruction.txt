@@ -1,0 +1,268 @@
+KHQR Mart Demo – Build Spec for opencode
+A sample playground project for experimenting with ABA / Bakong KHQR payments. Vue.js front-end, Node.js + Express back-end, no database.
+0. How to use this spec (instructions to the coding agent)
+1.  Read the whole spec before writing any code.
+2.  If something is genuinely blocking, ask. Otherwise, use the default stated in section 12 (Open questions) and note the assumption in the README.
+3.  Work in the phases listed in section 11 and make sure each phase runs before moving to the next.
+4.  Keep the code simple, readable and well commented. This is a learning playground, not production software.
+5.  Verify third-party package APIs against the installed package (README, type definitions, source in node_modules) instead of relying on memory. Versions differ.
+1. Goal
+Build a tiny web mart. The user browses about 10 products, selects one, and the app immediately shows a KHQR code for that product price. The KHQR can be scanned with the ABA Mobile app (or any Bakong-member banking app) to test the payment flow.
+Price range is deliberately tiny: 100 to 500 Cambodian Riel (KHR) per product.
+All KHQR logic lives in the back-end. The front-end never builds, signs or modifies QR payloads. It only asks the server for a QR and renders what it gets back.
+2. Tech stack
+Layer
+Choice
+Runtime
+Node.js 20 or newer, npm
+Back-end
+Express 4 or 5, ESM modules ("type": "module")
+KHQR generation
+bakong-khqr (official NBC SDK on npm)
+QR image rendering
+qrcode npm package, server side, returned as a PNG data URL
+Front-end
+Vue 3 (Composition API, <script setup>), Vite
+Styling
+Plain CSS or a small CSS file with variables. No UI framework needed
+Config
+dotenv for the server
+Database
+None. Products are a static in-memory array
+Supporting server packages: cors, dotenv, morgan (logging), optionally helmet and express-rate-limit.
+Supporting dev tooling: nodemon (or node --watch), concurrently at the repo root, optionally vitest + supertest for a few server tests.
+3. Repository layout
+khqr-mart-demo/
+├── package.json            # root scripts: dev, dev:server, dev:client, install:all
+├── README.md
+├── .gitignore
+├── server/
+│   ├── package.json
+│   ├── .env.example
+│   └── src/
+│       ├── index.js              # starts the HTTP server
+│       ├── app.js                # builds the Express app (importable for tests)
+│       ├── config.js             # reads and validates env vars
+│       ├── data/products.js      # static product list
+│       ├── routes/
+│       │   ├── products.routes.js
+│       │   └── payments.routes.js
+│       ├── services/
+│       │   ├── khqr.service.js       # ALL KHQR payload logic
+│       │   └── qr-image.service.js   # string -> PNG data URL
+│       └── middleware/
+│           ├── error-handler.js
+│           └── not-found.js
+└── client/
+    ├── package.json
+    ├── vite.config.js        # dev proxy: /api -> http://localhost:3001
+    ├── index.html
+    └── src/
+        ├── main.js
+        ├── App.vue
+        ├── api/client.js         # thin fetch wrapper
+        ├── components/
+        │   ├── ProductGrid.vue
+        │   ├── ProductCard.vue
+        │   └── QrPanel.vue
+        ├── composables/useKhqr.js   # state + request logic for the QR panel
+        └── styles/main.css
+Root npm run dev must start both server and client together.
+4. Product data
+Static array in server/src/data/products.js. Ten products, all with different prices, all inside 100 to 500 KHR:
+id
+name
+emoji
+price (KHR)
+p01
+Candy
+🍬
+100
+p02
+Chewing Gum
+🟩
+125
+p03
+Bottled Water
+💧
+150
+p04
+Instant Noodle Cup
+🍜
+200
+p05
+Potato Chips
+🥔
+250
+p06
+Chocolate Bar
+🍫
+300
+p07
+Iced Tea
+🧋
+350
+p08
+Biscuit Pack
+🍪
+400
+p09
+Fruit Juice
+🧃
+450
+p10
+Ice Cream
+🍦
+500
+Shape: { id, name, emoji, price, currency: "KHR" }. Prices are integers (Riel has no decimals in practice). Use emoji instead of image files so there are no assets to manage.
+5. Back-end specification
+5.1 Configuration (.env)
+PORT=3001
+CLIENT_ORIGIN=http://localhost:5173
+
+# Bakong account that RECEIVES the money (the ABA account's Bakong ID, looks like name@abaa)
+BAKONG_ACCOUNT_ID=your_name@abaa
+MERCHANT_NAME=Demo Mart
+MERCHANT_CITY=Phnom Penh
+STORE_LABEL=Demo Mart
+TERMINAL_LABEL=WEB-01
+
+# QR lifetime in minutes
+QR_EXPIRE_MINUTES=5
+
+# Optional: only needed for payment status checking (stretch goal)
+BAKONG_API_BASE=https://api-bakong.nbc.gov.kh
+BAKONG_API_TOKEN=
+config.js validates on startup and fails fast with a clear message if BAKONG_ACCOUNT_ID is missing or still the placeholder. Commit .env.example, never .env.
+EMV field limits to respect: merchant name max 25 characters, merchant city max 15 characters.
+5.2 API endpoints
+All JSON. Prefix /api.
+GET /api/health returns { "status": "ok" }.
+GET /api/products returns the product array.
+GET /api/products/:id returns one product, or 404.
+POST /api/payments/khqr
+Request:
+{ "productId": "p05" }
+Behaviour:
+1.  Look up the product on the server. Never accept an amount from the client. The price always comes from the server product list.
+2.  Sanity check the amount is an integer between 100 and 500 inclusive (make min and max constants).
+3.  Generate a KHQR payload through khqr.service.js.
+4.  Render the payload string into a PNG data URL through qr-image.service.js.
+5.  Return the result.
+Success response (200):
+{
+  "productId": "p05",
+  "productName": "Potato Chips",
+  "amount": 250,
+  "currency": "KHR",
+  "billNumber": "INV-20260101-000123",
+  "qrString": "0002010102...6304ABCD",
+  "qrImage": "data:image/png;base64,...",
+  "md5": "d41d8cd98f00b204e9800998ecf8427e",
+  "expiresAt": "2026-01-01T10:05:00.000Z"
+}
+Errors use one consistent shape: { "error": { "code": "PRODUCT_NOT_FOUND", "message": "..." } } with proper status codes (400 invalid input, 404 unknown product, 500 generation failure).
+GET /api/payments/:md5/status (stretch, see 5.4)
+5.3 KHQR service (khqr.service.js)
+This is the heart of the playground. Keep it in one file with a single exported function, for example createKhqr({ amount, billNumber }).
+Use the official SDK. Expected usage (confirm against the installed version):
+import pkg from 'bakong-khqr'; // CJS package, use default import or createRequire for ESM
+const { BakongKHQR, IndividualInfo, khqrData } = pkg;
+
+const optionalData = {
+  currency: khqrData.currency.khr,   // KHR = 116
+  amount: 250,                       // integer riel
+  billNumber: 'INV-...',
+  storeLabel: 'Demo Mart',
+  terminalLabel: 'WEB-01',
+  expirationTimestamp: Date.now() + 5 * 60 * 1000, // ms, dynamic QR needs an expiry
+};
+
+const info = new IndividualInfo(BAKONG_ACCOUNT_ID, MERCHANT_NAME, MERCHANT_CITY, optionalData);
+const result = new BakongKHQR().generateIndividual(info);
+// success: result.status.code === 0, result.data.qr, result.data.md5
+Requirements:
+• Throw a typed error if result.status.code !== 0, include the SDK message, and map it to a 500 with a readable message.
+• The bill number must be unique per request (timestamp plus counter or short random id).
+• Keep a small comment block in the file explaining the KHQR string structure (EMV TLV: tag, length, value; tag 54 amount; tag 53 currency; tag 63 CRC16).
+• If the SDK cannot be made to work in ESM or has an incompatible API, fall back to implementing the EMV TLV encoding and CRC16-CCITT (poly 0x1021, init 0xFFFF) by hand in the same file, and say so in the README.
+• Optional but nice: a decodeKhqr(qrString) helper using the SDK decode function, used in tests and a debug route.
+5.4 Stretch goal: payment status check
+Only implement if BAKONG_API_TOKEN is set.
+• GET /api/payments/:md5/status calls Bakong POST {BAKONG_API_BASE}/v1/check_transaction_by_md5 with body { "md5": "..." } and header Authorization: Bearer <token>.
+• Return { "status": "PAID" | "PENDING" | "UNKNOWN", "raw": ... }.
+• Expose GET /api/config returning { "paymentCheckEnabled": true|false } so the front-end knows whether to poll.
+• Without a token, the endpoint returns 501 with a clear message. The app must work fully without this feature.
+5.5 Express setup
+• app.js exports the app, index.js calls listen.
+• Middleware: express.json(), cors({ origin: CLIENT_ORIGIN }), morgan('dev'), optionally helmet, and a light rate limit on the payments route (for example 30 requests per minute).
+• Central error handler and a JSON 404 handler.
+• Graceful startup log showing port and the masked Bakong account id.
+6. Front-end specification
+6.1 Behaviour
+1.  On load, fetch /api/products and show them in a responsive grid (2 columns on mobile, 3 to 5 on desktop).
+2.  Each card shows emoji, name and price formatted like 250 ៛.
+3.  Clicking a product selects it (visible selected state) and immediately requests a KHQR from POST /api/payments/khqr.
+4.  The QR panel shows:
+    ◦ product name and amount
+    ◦ the QR image from qrImage
+    ◦ a countdown to expiresAt
+    ◦ a collapsible Debug section with qrString, md5 and billNumber (handy for playing around)
+5.  Selecting a different product replaces the QR. Ignore stale responses if the user clicks quickly (use AbortController or a request token).
+6.  When the countdown reaches zero, blur the QR, show "Expired" and a Regenerate button.
+7.  States to handle: initial (no selection, friendly hint), loading (skeleton or spinner), success, error (message plus Retry).
+8.  Footer notice: "Demo only. Scanning and paying with a real bank app transfers real money."
+6.2 Layout
+• Desktop: product grid on the left, sticky QR panel on the right.
+• Mobile: grid first, QR panel appears as a bottom sheet or modal after selecting a product.
+• Simple, clean look. Use CSS variables for colours. A red accent that nods to KHQR is fine.
+6.3 Code structure
+• api/client.js: getProducts(), createKhqr(productId), optional getPaymentStatus(md5). Base URL is /api (Vite proxy handles dev).
+• composables/useKhqr.js: holds selectedProduct, payment, status, error, secondsLeft, plus select(product) and regenerate().
+• Components stay presentational and small.
+• If payment checking is enabled, poll status every 3 seconds while a QR is active and show a "Paid" success state. Stop polling on expiry, on selection change and on unmount.
+• The front-end contains no KHQR strings, merchant data or amount calculation.
+7. Non-functional requirements
+• No database, no ORM, no auth.
+• No secrets in the client bundle.
+• Server restarts must not matter (stateless).
+• Basic input validation and no stack traces in API error responses.
+• Prettier or ESLint config is welcome but not required.
+8. Testing (light)
+If vitest and supertest are added:
+• GET /api/products returns 10 items, all prices unique and within 100 to 500.
+• POST /api/payments/khqr with a valid product returns a qrString that starts with 000201, ends with a 4 character CRC, and a 32 character md5.
+• POST /api/payments/khqr with an unknown product returns 404, and ignores any amount in the request body.
+• Decoding the generated qrString returns the same amount and currency 116.
+9. README requirements
+The README must cover: what the project is, prerequisites, setup, how to get a Bakong account ID from an ABA account, env variables table, how to run, API reference, how to test the QR with ABA Mobile, known limitations, and the stretch-goal notes.
+10. Acceptance criteria
+• npm run install:all then npm run dev starts both apps with no errors.
+• Front-end at http://localhost:5173 shows 10 products with unique prices between 100 and 500 ៛.
+• Selecting any product shows a scannable KHQR within about a second.
+• ABA Mobile scans the QR and shows the correct amount in KHR, the merchant name and the receiving account.
+• Changing the product changes the QR and amount.
+• Tampering with the request amount in dev tools has no effect on the QR.
+• Server refuses to boot with a missing or placeholder Bakong account id.
+• No KHQR logic exists in the client code.
+11. Suggested build phases
+1.  Scaffold both apps, root scripts, .gitignore, .env.example.
+2.  Back-end basics: config, products, health and products routes, error handling.
+3.  KHQR service and POST /api/payments/khqr, verified with curl and a decode check.
+4.  Front-end: product grid, selection, QR panel, countdown, states.
+5.  Polish: responsive layout, debug section, error handling, regenerate flow.
+6.  Stretch: payment status check and polling (only if a token is available).
+7.  Tests and README.
+12. Open questions (with defaults if unanswered)
+1.  Bakong account ID: what is the receiving ID (format name@abaa)? Default: placeholder in .env.example, I fill it in later.
+2.  QR type: Individual KHQR or Merchant KHQR? Default: Individual, which is simplest for a personal ABA account.
+3.  Currency: KHR only? Default: KHR only. USD is out of scope.
+4.  Payment confirmation: do you have a Bakong API token for status checking? Default: not implemented unless a token is set.
+5.  Language: JavaScript or TypeScript for client and server? Default: JavaScript.
+6.  Repo style: two independent folders with a root concurrently script, or npm workspaces? Default: two folders plus concurrently.
+7.  Cart: single product per QR, or a multi-item cart with a total? Default: single product per QR.
+8.  UI language: English only, or English plus Khmer labels? Default: English only.
+9.  QR presentation: plain QR image, or a KHQR-style card with branded header? Default: plain QR inside a simple card.
+10.  Package manager: npm, pnpm or yarn? Default: npm.
+13. Out of scope
+User accounts, orders history, inventory counts, cart, checkout flows, database, deployment, webhooks, refunds, multi-currency, i18n.
